@@ -1,0 +1,85 @@
+import bpy
+
+# Clear existing objects
+bpy.ops.wm.read_factory_settings(use_empty=True)
+
+# Function to create a sphere
+def create_sphere(name, radius, color):
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=radius, location=(0, 0, 0))
+    sphere = bpy.context.view_layer.objects.active
+    sphere.name = name
+    mat = bpy.data.materials.new(name=f"{name}Material")
+    mat.diffuse_color = color  # Set the color
+    sphere.data.materials.append(mat)
+    return sphere
+
+# Function to create an orbit path
+def create_orbit_path(radius):
+    bpy.ops.curve.primitive_nurbs_circle_add(radius=radius)
+    path = bpy.context.view_layer.objects.active
+    path.name = f"Orbit_{radius}"
+    path.data.use_path = True
+    return path
+
+# Function to create orbit animation
+def create_orbit(sphere, path, orbit_duration):
+    # Add follow path constraint
+    constraint = sphere.constraints.new(type='FOLLOW_PATH')
+    constraint.target = path
+
+    # Set the path animation frames
+    path.data.path_duration = int(orbit_duration)
+
+    # Animate the movement along the path
+    sphere.animation_data_create()
+    action = bpy.data.actions.new(name=f"{sphere.name}_OrbitAction")
+    sphere.animation_data.action = action
+    
+    fcurve = action.fcurves.new(data_path="constraints[\"Follow Path\"].offset_factor")
+    keyframe_points = fcurve.keyframe_points
+    keyframe_points.add(2)
+    keyframe_points[0].co = (0, 0)  # Frame 0
+    keyframe_points[1].co = (orbit_duration, 1)  # Frame orbit_duration
+
+    for keyframe in keyframe_points:
+        keyframe.interpolation = 'LINEAR'
+
+# Sun
+sun = create_sphere("Sun", 1.0, (1, 1, 0, 1))
+
+# Adjusted frame durations to fit within 1000 frames
+total_frames = 1000
+frame_durations = {
+    "Mercury": 24,
+    "Venus": 62,
+    "Earth": 100,
+    "Mars": 188,
+    "Jupiter": 1186,
+    "Saturn": 2946,
+    "Uranus": 8401,
+    "Neptune": 16480,
+    "Pluto": 24800
+}
+
+planet_data = [
+    ("Mercury", 0.1, 2, (0.5, 0.5, 0.5, 1)),
+    ("Venus", 0.2, 3, (1, 0.7, 0.2, 1)),
+    ("Earth", 0.2, 4, (0.2, 0.5, 1, 1)),
+    ("Mars", 0.15, 5, (1, 0.3, 0.3, 1)),
+    ("Jupiter", 0.5, 7, (1, 0.9, 0.5, 1)),
+    ("Saturn", 0.4, 9, (1, 1, 0.6, 1)),
+    ("Uranus", 0.3, 12, (0.6, 0.8, 1, 1)),
+    ("Neptune", 0.3, 15, (0.4, 0.5, 1, 1)),
+    ("Pluto", 0.1, 20, (0.7, 0.7, 0.7, 1))
+]
+
+for name, radius, distance, color in planet_data:
+    planet = create_sphere(name, radius, color)
+    orbit_path = create_orbit_path(distance)
+    orbit_duration = frame_durations[name]
+    create_orbit(planet, orbit_path, orbit_duration)
+
+# Set the timeline
+bpy.context.scene.frame_end = total_frames
+
+print("Solar system created and animated!")
