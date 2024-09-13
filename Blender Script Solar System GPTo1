@@ -1,0 +1,121 @@
+import bpy
+import math
+from mathutils import Vector
+
+# Clear existing objects
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete(use_global=False)
+
+# Create the Sun
+bpy.ops.mesh.primitive_uv_sphere_add(radius=2, location=(0, 0, 0))
+sun = bpy.context.object
+sun.name = 'Sun'
+
+# Add emission material to the Sun
+mat_sun = bpy.data.materials.new(name="SunMaterial")
+mat_sun.use_nodes = True
+nodes = mat_sun.node_tree.nodes
+emission = nodes.new(type='ShaderNodeEmission')
+output = nodes['Material Output']
+nodes.remove(nodes['Principled BSDF'])
+mat_sun.node_tree.links.new(emission.outputs['Emission'], output.inputs['Surface'])
+emission.inputs['Color'].default_value = (1, 0.5, 0, 1)
+emission.inputs['Strength'].default_value = 5
+sun.data.materials.append(mat_sun)
+
+# Planet data: (name, distance from sun, size, color, orbital period)
+planets = [
+    ('Mercury', 4, 0.38, (0.8, 0.7, 0.6, 1), 88),
+    ('Venus', 6, 0.95, (0.9, 0.6, 0.3, 1), 225),
+    ('Earth', 8, 1, (0, 0, 1, 1), 365),
+    ('Mars', 10, 0.53, (1, 0, 0, 1), 687),
+    ('Jupiter', 14, 11.2, (0.9, 0.6, 0.5, 1), 4333),
+    ('Saturn', 18, 9.45, (0.9, 0.8, 0.5, 1), 10759),
+    ('Uranus', 22, 4, (0.5, 0.8, 1, 1), 30687),
+    ('Neptune', 26, 3.88, (0.3, 0.5, 1, 1), 60190),
+]
+
+# Create planets
+for name, distance, size, color, period in planets:
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=size, location=(distance, 0, 0))
+    planet = bpy.context.object
+    planet.name = name
+
+    # Add material
+    mat = bpy.data.materials.new(name + "Material")
+    mat.diffuse_color = color
+    planet.data.materials.append(mat)
+
+    # Create empty object for orbit
+    bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
+    orbit = bpy.context.object
+    orbit.name = name + '_Orbit'
+
+    # Parent planet to orbit
+    planet.parent = orbit
+
+    # Animate the orbit
+    frame_num = 0
+    orbit.rotation_euler = (0, 0, 0)
+    orbit.keyframe_insert(data_path="rotation_euler", frame=frame_num)
+    frame_num = 360
+    orbit.rotation_euler = (0, 0, math.radians(360))
+    orbit.keyframe_insert(data_path="rotation_euler", frame=frame_num * (period / 365))
+
+    # Optionally, add rings to Saturn
+    if name == 'Saturn':
+        bpy.ops.mesh.primitive_torus_add(location=(distance, 0, 0), major_radius=size + 1, minor_radius=0.2)
+        ring = bpy.context.object
+        ring.name = 'Saturn_Ring'
+        ring.rotation_euler[0] = math.radians(90)
+        ring.parent = orbit
+        ring.data.materials.append(mat)
+
+    # Optionally, add moons to Earth
+    if name == 'Earth':
+        # Create moon
+        moon_distance = size + 1
+        moon_size = 0.27
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=moon_size, location=(distance + moon_distance, 0, 0))
+        moon = bpy.context.object
+        moon.name = 'Moon'
+
+        # Add material
+        mat_moon = bpy.data.materials.new("MoonMaterial")
+        mat_moon.diffuse_color = (0.8, 0.8, 0.8, 1)
+        moon.data.materials.append(mat_moon)
+
+        # Create empty for moon orbit
+        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(distance, 0, 0))
+        moon_orbit = bpy.context.object
+        moon_orbit.name = 'Moon_Orbit'
+
+        # Parent moon to moon orbit
+        moon.parent = moon_orbit
+
+        # Parent moon orbit to Earth
+        moon_orbit.parent = orbit
+
+        # Animate moon orbit
+        frame_num = 0
+        moon_orbit.rotation_euler = (0, 0, 0)
+        moon_orbit.keyframe_insert(data_path="rotation_euler", frame=frame_num)
+        frame_num = 360
+        moon_orbit.rotation_euler = (0, 0, math.radians(360))
+        moon_orbit.keyframe_insert(data_path="rotation_euler", frame=frame_num * (27 / 365))
+
+# Add camera
+bpy.ops.object.camera_add(location=(0, -50, 25), rotation=(math.radians(60), 0, 0))
+camera = bpy.context.object
+bpy.context.scene.camera = camera
+
+# Add light
+bpy.ops.object.light_add(type='SUN', location=(0, 0, 0))
+light = bpy.context.object
+light.data.energy = 5
+
+# Set render settings
+bpy.context.scene.render.engine = 'CYCLES'
+bpy.context.scene.frame_end = 360
+
+print("Solar system created and animated!")
